@@ -9,7 +9,16 @@ import (
 	"os"
 	"text/tabwriter"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 )
+
+//bubbletea model
+type model struct {
+	choices []string
+	cursor int
+	selected map[int]struct{}
+}
 
 //repo owner
 type Owner struct {
@@ -43,7 +52,7 @@ func main() {
 	}
 
 	url := fmt.Sprintf("https://api.github.com/search/repositories?q=stars:>=5000+language:c&sort=stars&order=desc&per_page=%d", limit)
-	
+
 	res, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
@@ -56,7 +65,7 @@ func main() {
 	}
 
 	// if res.StatusCode != 200 {
-	// 	log.Fatal("Unexpected status code", res.StatusCode)
+	//	log.Fatal("Unexpected status code", res.StatusCode)
 	// }
 
 	if res.StatusCode != http.StatusOK {
@@ -70,6 +79,14 @@ func main() {
 	}
 
 	printData(data, limit)
+
+	//charm funcs
+	p := tea.NewProgram(initialModel())
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error: %v.", err)
+		os.Exit(1)
+	}
+
 }
 
 func printData(data JSONData, limit int) {
@@ -99,4 +116,68 @@ func printData(data JSONData, limit int) {
 	}
 
 	tw.Flush()
+}
+
+func initialModel() model {
+	return model {
+		choices: []string{ "buy: test1", "buy: test2", "buy: test3" },
+		selected: make(map[int]struct{}),
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+		case tea.KeyPressMsg:
+
+			switch msg.String() {
+				case "ctrl+c", "q":
+					return m, tea.Quit
+
+				case "up", "k":
+					if m.cursor > 0 {
+						m.cursor--
+					}
+
+				case "down", "j":
+					if m.cursor < len(m.choices) - 1 {
+						m.cursor++
+					}
+
+				case "enter", "space":
+					_, ok := m.selected[m.cursor]
+					if ok {
+						delete(m.selected, m.cursor)
+					} else {
+						m.selected[m.cursor] = struct{}{}
+					}
+			}
+	}
+
+	return m, nil
+}
+
+func (m model) View() tea.View {
+	s := "What should we buy - test\n"
+
+	for i, choice := range m.choices {
+		cursor := " "
+		if m.cursor == i {
+			cursor = ">"
+		}
+
+		checked := " "
+		if _, ok := m.selected[i]; ok {
+			checked = "x"
+		}
+
+		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+	}
+
+	s += "\nPress q to quit.\n"
+	return tea.NewView(s)
 }
